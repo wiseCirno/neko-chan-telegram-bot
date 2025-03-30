@@ -20,7 +20,7 @@ BOT_TOKEN: str | None = os.getenv("BOT_TOKEN", None)
 
 PROXY: str | None = os.getenv("PROXY", None)
 
-MY_USER_ID = int(os.getenv("MY_USER_ID", None))
+MY_USER_ID = int(os.getenv("MY_USER_ID", -1))
 # [Optional]
 AUTO_DOWNLOAD_CACHE_CLEAN = abs(int(os.getenv('AUTO_DOWNLOAD_CLEAN', 0)))
 
@@ -31,7 +31,7 @@ IMAGE_DOWNLOAD_BATCH_SIZE = abs(int(os.getenv('TELEGRAPH_DOWNLOAD_BATCH_SIZE', 1
 
 IMAGE_DOWNLOAD_RETRY_COUNT = abs(int(os.getenv('TELEGRAPH_DOWNLOAD_RETRY_COUNT', 3)))
 
-IS_DEBUG_MODE: bool = bool(os.getenv("IS_DEBUG_MODE", False))
+IS_DEBUG_MODE: bool = bool(os.getenv("IS_DEBUG_MODE", True))
 
 SKIP_EXISTED_FILE = os.getenv("SKIP_EXISTED_FILE", False)
 
