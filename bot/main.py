@@ -8,14 +8,12 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-
-from bot import (
-    introduce,
-    instructions,
+from bot.help import introduce, instructions
+from bot.core import (
     ChatAnywhereHandler,
     GPT_OK,
     GPT_INIT,
-    KOMGA,
+    KOMGA_STATE_ACTIVATED,
     PandoraBox,
     LongSticker,
     TelegraphMessageHandler
@@ -56,18 +54,21 @@ def main() -> None:
     neko_chan.add_handler(CommandHandler(_cmd['❤️'], pandora.parse, filters.REPLY))
     neko_chan.add_handler(CommandHandler(_cmd['📺'], pandora.anime_search, filters.REPLY))
 
-    if config.MY_USER_ID == -1:
-        logger.info("[Main]: User ID not set, telegraph syncing service_old will not work.")
-    else:
-        # core function: Sync Telegraph manga
-        telegraph = TelegraphMessageHandler(config.MY_USER_ID)
-        telegraph_monitor = ConversationHandler(
-            entry_points = [CommandHandler(_cmd['📖'], telegraph.start)],
-            states = {KOMGA: [MessageHandler(filters.TEXT, telegraph.add)]},
-            fallbacks = [],
-            conversation_timeout = 300
-        )
-        neko_chan.add_handler(telegraph_monitor)
+    # -- /komga -- #
+    telegraph_handler = TelegraphMessageHandler()
+    telegraph_conversation_handler = ConversationHandler(
+        entry_points = [
+            CommandHandler("komga", telegraph_handler.start)
+        ],
+        states = {
+            KOMGA_STATE_ACTIVATED: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, telegraph_handler.add)
+            ]
+        },
+        fallbacks = [],
+        conversation_timeout = 300
+    )
+    neko_chan.add_handler(telegraph_conversation_handler)
 
     # core function: ChatAnywhere GPT conversation
     chat_anywhere = ChatAnywhereHandler(config.MY_USER_ID, config.CHAT_ANYWHERE_KEY,

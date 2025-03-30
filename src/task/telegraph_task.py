@@ -11,7 +11,6 @@ class TelegraphTask:
     @staticmethod
     async def run(task_wrapper: Dict):
         """
-        :raise ValueError: 不受支持的参数
         :return:
         """
         task_id: str = task_wrapper['id']
@@ -23,10 +22,15 @@ class TelegraphTask:
             srv = await TelegraphService.get_from_message(message.text_html_urled)
             if srv.telegraph is None:
                 raise RuntimeError(f"Can not get Telegraph information from Task<{task_id}>.")
+            # 该消息和本任务无关，直接标记完成，跳过
+            if srv.telegraph.url == "":
+                task_wrapper['return'] = f"Task<{task_id}> completed，type: <skip>"
+                return
             task_wrapper['srv'] = srv
 
         if task_type == "no_file":
             await srv.add_to_database()
+            task_wrapper['return'] = f"Task<{task_id}> completed，type: <no_file>"
             return
 
         # 获取艺术家名称
@@ -34,19 +38,19 @@ class TelegraphTask:
         file_name = srv.get_file_name()
         download_path = os.path.join(config.TELEGRAPH_DOWNLOAD_PATH, str(srv.telegraph.id))
 
-        # 从图片列表下载
+        # 从图片列表下载，这里可能抛出异常
         await ImageService.download(srv.telegraph.image_list, download_path)
 
         if task_type == "zip":
             await FileService.write_zip_async(file_name, config.TELEGRAPH_KOMGA_PATH, download_path, artist)
             srv.telegraph.file_path = f"{config.TELEGRAPH_KOMGA_PATH}/{artist}/{file_name}.zip"
             await srv.add_to_database()
+            task_wrapper['return'] = f"Task<{task_id}> completed，type: <zip>"
             return
 
         if task_type == "epub":
             await FileService.write_epub(srv, config.TELEGRAPH_KOMGA_PATH, download_path, artist)
             srv.telegraph.file_path = f"{config.TELEGRAPH_KOMGA_PATH}/{artist}/{file_name}.epub"
             await srv.add_to_database()
+            task_wrapper['return'] = f"Task<{task_id}> completed，type: <epub>"
             return
-
-        raise ValueError(f"Unsupported task type {task_type} from Task<{task_id}>")

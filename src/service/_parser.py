@@ -39,8 +39,13 @@ class TelegraphParser:
         )
 
     def _fallback(self) -> Telegraph:
+        """
+        Telegram 的链接是无法以纯文本的方式发送的，也就是如果这是一个合法的链接格式，消息就一定会以 href 包裹
+        在客户端中会表现为这个链接的颜色不是白色的文本，而且可以被点击
+        :return: Telegraph 类
+        """
         m = re.search(r'href="([^"]+)"', self._html_text)
-        return Telegraph(url = urllib.parse.unquote(m.group(1)) if m else self._html_text)
+        return Telegraph(url = urllib.parse.unquote(m.group(1)) if m else "")
 
     def parse(self) -> Telegraph:
         """

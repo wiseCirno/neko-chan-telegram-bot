@@ -61,6 +61,11 @@ class TelegraphService:
 
     async def _get_information(self) -> None:
         async with new_async_client(TelegraphHeaders.DEFAULT) as client:
+            # 解析出来发现这个 url 不是想要的 url，直接把字段清空方便后面的处理逻辑
+            if not self.telegraph.url.startswith("https://telegra.ph"):
+                self.telegraph.url = ""
+                return
+
             response = await client.get(self.telegraph.url)
             if response.status_code != 200:
                 self.telegraph = None

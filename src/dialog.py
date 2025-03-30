@@ -31,7 +31,3 @@ class Dialog:
     KOMGA_TASK_FAILED: Callable[[Exception], str] = (
         staticmethod(lambda err: f"`{err}`\n\n如果你确定这条消息有效，请稍后再试试\n\n"
                                  f"[🔍 Search error on Google](https://www.google.com/search?q=Python: {err})"))
-
-    # -- DEBUG -- #
-    KOMGA_TASK_FINISHED: Callable[[str], str] = (
-        staticmethod(lambda info: f"DEBUG: `Task <{info}>` complete"))

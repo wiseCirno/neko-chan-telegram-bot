@@ -30,7 +30,8 @@ class TelegraphHandler:
             'retry': 0,
             'srv': None,
             'update': update,
-            'task_type': config.BOT_TELEGRAPH_SAVE_FORMAT
+            'task_type': config.BOT_TELEGRAPH_SAVE_FORMAT,
+            'return': ""
         }
 
         async def task_func():
@@ -70,8 +71,8 @@ class TelegraphHandler:
                         await update.message.reply_markdown(Dialog.KOMGA_TASK_FAILED(result), do_quote = True)
                 else:
                     if config.IS_DEBUG_MODE:
-                        await update.message.reply_markdown(Dialog.KOMGA_TASK_FINISHED(wrapper['id']), do_quote = True)
-                    logger.debug(f"Task<{wrapper['id']}> finished.")
+                        await update.message.reply_markdown(wrapper['return'], do_quote = True)
+                    logger.debug(wrapper['return'])
 
             for _ in task_wrappers:
                 self._task_queue.task_done()

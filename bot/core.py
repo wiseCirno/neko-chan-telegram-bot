@@ -14,8 +14,9 @@ from src.api import ChatAnywhereApi, TraceMoeApi
 from src.handler import TelegraphHandler
 from src.service_old import AggregationSearch
 from src.logger import logger
+import src.config as config
 
-(KOMGA, GPT_INIT, GPT_OK) = range(3)
+(KOMGA_STATE_ACTIVATED, GPT_INIT, GPT_OK) = range(3)
 
 
 class LongSticker:
@@ -198,22 +199,22 @@ class PandoraBox:
 
 
 class TelegraphMessageHandler:
-    def __init__(self, user_id: int = -1):
-        self._user_id: int = user_id
+    def __init__(self):
         self._handler: TelegraphHandler | None = TelegraphHandler()
 
-        if user_id != -1:
+        if config.MY_USER_ID != -1:
             asyncio.get_event_loop().create_task(self._handler.start_loop())
         else:
             self._handler = None
 
-    async def start(self, update: Update, _):
-        if update.message.from_user.id != self._user_id:
+    @staticmethod
+    async def start(update: Update, _):
+        if update.message.from_user.id != config.MY_USER_ID:
             await update.message.reply_text(Dialog.KOMGA_HANDLER_USER_UNAUTHORIZED(update.message))
             return ConversationHandler.END
         else:
             await update.message.reply_text(Dialog.KOMGA_HANDLER_USER_AUTHORIZED(update.message))
-            return KOMGA
+            return KOMGA_STATE_ACTIVATED
 
     async def add(self, update: Update, _):
         await self._handler.add_task(update)
