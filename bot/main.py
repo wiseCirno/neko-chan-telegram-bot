@@ -5,7 +5,6 @@ from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     ConversationHandler,
-    ContextTypes,
     MessageHandler,
     filters,
 )
@@ -19,47 +18,37 @@ from bot import (
     KOMGA,
     PandoraBox,
     LongSticker,
-    TelegraphHandler
+    TelegraphMessageHandler
 )
-from src.utils import EnvironmentReader, logger, proxy_init
-
-if __name__ == "__main__":
-    async def error_handler(_, context: ContextTypes.DEFAULT_TYPE):
-        logger.error(context.error)
+from src.logger import logger
+import src.config as config
+from src.service import ProxyService
 
 
-    _env = EnvironmentReader()
-    _proxy = proxy_init(_env.get_variable("PROXY"))
-    _cf_proxy = _env.get_variable("CF_WORKER_PROXY")
-    _bot_token = _env.get_variable("BOT_TOKEN")
-    _user_id = _env.get_variable("MY_USER_ID")
-    _chat_key = _env.get_variable("CHAT_ANYWHERE_KEY")
-    _chat_model = _env.get_variable("CHAT_ANYWHERE_MODEL")
-    _chat_prompt = _env.get_variable("CHAT_ANYWHERE_PROMPT")
-    _telegraph_thread = _env.get_variable("TELEGRAPH_THREADS")
-    _cmd = _env.BOT_COMMAND
-    _base_url = f'{_cf_proxy}/{_env.BASE_URL}' if _cf_proxy else _env.BASE_URL
-    _base_file_url = f'{_cf_proxy}/{_env.BASE_FILE_URL}' if _cf_proxy else _env.BASE_FILE_URL
-    [os.makedirs(name = d, exist_ok = True, mode = 0o777) for d in _env.WORKING_DIRS]
+def main() -> None:
+    _proxy = ProxyService.new_proxy(config.PROXY) if config.PROXY else None
+    _cmd = config.BOT_COMMAND
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
     # exit if no bot token
-    if not _bot_token:
+    if not config.BOT_TOKEN:
         logger.error("[Main]: Bot token not set, please fill right params and try again.")
         exit(1)
 
     # create bot with envs
     neko_chan = (
-        ApplicationBuilder().token(_bot_token).
-        proxy(_proxy).get_updates_proxy(_proxy).
-        pool_timeout(30.).connect_timeout(30.).
-        base_url(_base_url).base_file_url(_base_file_url).build()
+        ApplicationBuilder().token(config.BOT_TOKEN)
+        .proxy(_proxy).get_updates_proxy(_proxy)
+        .pool_timeout(30.).connect_timeout(30.).build()
+    ) if config.PROXY else (
+        ApplicationBuilder().token(config.BOT_TOKEN)
+        .pool_timeout(30.).connect_timeout(30.).build()
     )
 
     # core function: Send Long Sticker
-    long = LongSticker(_proxy, _cf_proxy)
+    long = LongSticker(_proxy)
     # core function: Parse contents based on reply
-    pandora = PandoraBox(_proxy, _cf_proxy)
+    pandora = PandoraBox(_proxy)
 
     neko_chan.add_handler(CommandHandler(_cmd['👀'], introduce))
     neko_chan.add_handler(CommandHandler(_cmd['❔'], instructions))
@@ -67,21 +56,22 @@ if __name__ == "__main__":
     neko_chan.add_handler(CommandHandler(_cmd['❤️'], pandora.parse, filters.REPLY))
     neko_chan.add_handler(CommandHandler(_cmd['📺'], pandora.anime_search, filters.REPLY))
 
-    if _user_id == -1:
-        logger.info("[Main]: User ID not set, telegraph syncing service will not work.")
+    if config.MY_USER_ID == -1:
+        logger.info("[Main]: User ID not set, telegraph syncing service_old will not work.")
     else:
         # core function: Sync Telegraph manga
-        telegraph = TelegraphHandler(_user_id, _telegraph_thread, _proxy, _cf_proxy)
+        telegraph = TelegraphMessageHandler(config.MY_USER_ID)
         telegraph_monitor = ConversationHandler(
-            entry_points = [CommandHandler(_cmd['📖'], telegraph.komga_start)],
-            states = {KOMGA: [MessageHandler(filters.TEXT, telegraph.add_task)]},
+            entry_points = [CommandHandler(_cmd['📖'], telegraph.start)],
+            states = {KOMGA: [MessageHandler(filters.TEXT, telegraph.add)]},
             fallbacks = [],
             conversation_timeout = 300
         )
         neko_chan.add_handler(telegraph_monitor)
 
     # core function: ChatAnywhere GPT conversation
-    chat_anywhere = ChatAnywhereHandler(_user_id, _chat_key, _chat_model, _chat_prompt, _proxy, _cf_proxy)
+    chat_anywhere = ChatAnywhereHandler(config.MY_USER_ID, config.CHAT_ANYWHERE_KEY,
+                                        config.CHAT_ANYWHERE_MODEL, config.CHAT_ANYWHERE_PROMPT, _proxy)
     lets_chat = ConversationHandler(
         entry_points = [CommandHandler(_cmd['💬'], chat_anywhere.new)],
         states = {
@@ -93,13 +83,13 @@ if __name__ == "__main__":
     )
     neko_chan.add_handler(lets_chat)
 
-    # error handler (no use now)
-    neko_chan.add_error_handler(error_handler)
-
     try:
-        _env.print_env()
         logger.info("[Main]: Initialise Neko Chan......")
         neko_chan.run_polling(allowed_updates = Update.ALL_TYPES)
     except Exception as exc:
         logger.error(f"[Main]: Fatal error in initialization: {exc}")
         exit(1)
+
+
+if __name__ == "__main__":
+    main()

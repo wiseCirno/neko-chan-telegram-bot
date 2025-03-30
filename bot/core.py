@@ -1,19 +1,19 @@
 import asyncio
 import re
 from io import BytesIO
-from typing import Optional, List
+from typing import Optional
 
 from PIL import Image
-from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 from httpx import Proxy
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ConversationHandler, ContextTypes, filters
-from urlextract import URLExtract
 
-from src.network_api import ChatAnywhereApi, TraceMoeApi
-from src.service import Telegraph, TelegraphDatabase, AggregationSearch
-from src.utils import logger
+from src.dialog import Dialog
+from src.api import ChatAnywhereApi, TraceMoeApi
+from src.handler import TelegraphHandler
+from src.service_old import AggregationSearch
+from src.logger import logger
 
 (KOMGA, GPT_INIT, GPT_OK) = range(3)
 
@@ -84,21 +84,6 @@ class PandoraBox:
         self._headers = {'User-Agent': UserAgent().random}
 
     async def parse(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        async def send_epub(url):
-            try:
-                telegraph_task = Telegraph(url, 1, self._proxy, self._cf_proxy)
-                document = await telegraph_task.get_epub()
-
-                await update.message.reply_document(
-                    document = document,
-                    connect_timeout = 30.,
-                    write_timeout = 30.,
-                    pool_timeout = 30.,
-                    read_timeout = 30.
-                )
-            except Exception as exc:
-                await update.message.reply_text(text = f"出错了: {exc}")
-
         async def search_and_reply(url):
             results = await AggregationSearch(self._proxy, self._cf_proxy).aggregation_search(url)
             m, b = "🔎 _搜索结果_ ", []
@@ -137,8 +122,6 @@ class PandoraBox:
         if link_preview:
             if re.search(r'booru|x|twitter|pixiv|ascii2d|saucenao', link_preview.url):
                 await update.message.reply_text("这...这不用来找我吧(")
-            elif re.search(r'telegra.ph', link_preview.url):
-                await send_epub(link_preview.url)
             else:
                 await search_and_reply(link_preview.url)
             return ConversationHandler.END
@@ -214,126 +197,26 @@ class PandoraBox:
         return ConversationHandler.END
 
 
-class TelegraphHandler:
-    def __init__(
-            self,
-            user_id: int = -1,
-            thread: int = 1,
-            proxy: Optional[Proxy] = None,
-            cloudflare_worker_proxy: Optional[str] = None
-    ):
-        self._thread = thread
-        self._proxy = proxy
-        self._cf_proxy = cloudflare_worker_proxy
-        self._user_id = user_id
-        self._tasks = asyncio.Queue()
+class TelegraphMessageHandler:
+    def __init__(self, user_id: int = -1):
+        self._user_id: int = user_id
+        self._handler: TelegraphHandler | None = TelegraphHandler()
 
         if user_id != -1:
-            asyncio.get_event_loop().create_task(self._main_loop())
-
-    async def _main_loop(self):
-        async def worker(queue, n):
-            tasks = [await queue.get() for _ in range(n)]
-
-            try:
-                await asyncio.gather(*tasks, return_exceptions = True)
-            except Exception as e:
-                logger.error(f"[Core]: {e}")
-            finally:
-                for _ in tasks:
-                    queue.task_done()
-
-        idle_count = 0
-
-        while True:
-            await asyncio.sleep(10) if idle_count >= 20 else await asyncio.sleep(1)
-
-            if not self._tasks.empty():
-                idle_count = 0
-                await worker(self._tasks, 1 if self._tasks.qsize() == 1 else 2)
-
-            idle_count += 1
-
-    async def komga_start(self, update: Update, _):
-        if update.message.from_user.id != self._user_id:
-            await update.message.reply_text(f"だめですよ~, {update.message.from_user.username}")
-            return ConversationHandler.END
-
-        msg = f"@{update.message.from_user.username}, 把 telegraph 链接端上来罢 ฅ(＾・ω・＾ฅ)"
-        await update.message.reply_text(text = msg)
-
-        return KOMGA
-
-    async def add_task(self, update: Update, _):
-        if update.message.from_user.id != self._user_id:
-            return KOMGA
-
-        urls = list(set(
-            i for i in URLExtract().find_urls(update.message.text_html_urled)
-            if "telegra.ph" in i
-        ))
-
-        if len(urls) != 1:
-            for u in urls:
-                await self._tasks.put(Telegraph(u, self._thread, self._proxy, self._cf_proxy).get_zip())
-
-            logger.warning(
-                "[CoreFunction]: Multiple urls detected, database won't be updated."
-                f" Source:\n{update.message.text_html_urled}"
-            )
-
-            return KOMGA
-
-        soup = BeautifulSoup(update.message.text_html_urled, "html.parser")
-        matches = {}
-
-        if not soup.find_all('code'):
-            for line in update.message.text_html_urled.split('\n'):
-                line = line.replace('：', ':')
-                key, value = line.strip().split(':', 1)
-                if key in ["预览", "原始地址"]:
-                    value = re.search(r'href="([^"]+)"', line).group(1)
-                else:
-                    value = value.lstrip('#').split('#')
-                matches[key] = value
+            asyncio.get_event_loop().create_task(self._handler.start_loop())
         else:
-            for code in soup.find_all('code'):
-                key = code.text.strip().translate(str.maketrans('', '', ':：'))
-                value = str(code.next_sibling).strip().translate(str.maketrans('', '', ':： '))
-                link = code.find_next('a')
-                if link and 'href' in link.attrs and key in ["预览", "原始地址"]:
-                    value = link.get('href')
-                else:
-                    value = value.lstrip('#').split('#')
-                matches[key] = value
+            self._handler = None
 
-        cvt_dict = {
-            "语言": 'language',
-            "原作": 'original',
-            "角色": 'characters',
-            "艺术家": 'artist',
-            "团队": 'team',
-            "混合": 'others',
-            "女性": 'female',
-            "男性": 'male',
-            "预览": 'preview_url',
-            "原始地址": 'original_url',
-            "其他": "others"
-        }
+    async def start(self, update: Update, _):
+        if update.message.from_user.id != self._user_id:
+            await update.message.reply_text(Dialog.KOMGA_HANDLER_USER_UNAUTHORIZED(update.message))
+            return ConversationHandler.END
+        else:
+            await update.message.reply_text(Dialog.KOMGA_HANDLER_USER_AUTHORIZED(update.message))
+            return KOMGA
 
-        db_dict = {}
-        for k, v in matches.items():
-            new_key = cvt_dict.get(k, k)
-
-            if isinstance(v, List):
-                db_dict.setdefault(new_key, []).extend(v)
-            else:
-                db_dict[new_key] = db_dict.setdefault(new_key, v)
-
-        d_task = TelegraphDatabase()
-        await self._tasks.put(
-            d_task.insert(d_task.new(db_dict), Telegraph(urls[0], self._thread, self._proxy, self._cf_proxy))
-        )
+    async def add(self, update: Update, _):
+        await self._handler.add_task(update)
 
 
 class ChatAnywhereHandler:
@@ -400,7 +283,7 @@ class ChatAnywhereHandler:
         try:
             result = await self._hosted_instances[user_id].chat(user_input, self._prompt, self._model)
             message = result['answers'][0]['message']['content']
-            await update.message.reply_text(text = message, quote = False)
+            await update.message.reply_text(text = message)
         except Exception as exc:
             logger.error(f'[Chat Mode]: {exc}')
             await update.message.reply_text(str(exc))

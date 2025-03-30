@@ -36,7 +36,7 @@ class AggregationSearch:
         async with AsyncClient(
                 headers = headers,
                 cookies = parse_cookies(cookies),
-                proxies = self._proxy,
+                proxy = self._proxy,
                 follow_redirects = True
         ) as client:
             resp = await client.get(_url)
@@ -44,7 +44,7 @@ class AggregationSearch:
             return resp.content
 
     @staticmethod
-    async def _format(resp: Ascii2DResponse | GoogleResponse | IqdbResponse) -> List[Dict] | Dict:
+    async def _format(resp: Ascii2DResponse | GoogleResponse | IqdbResponse):
         if isinstance(resp, Ascii2DResponse):
             result = []
 

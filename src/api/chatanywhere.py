@@ -54,7 +54,7 @@ class ChatAnywhereApi:
         elif auth_type == 1:
             headers['Authorization'] = self._token
 
-        async with AsyncClient(proxies = self._proxy, headers = headers) as client:
+        async with AsyncClient(proxy = self._proxy, headers = headers) as client:
             if method == 'GET':
                 return await _handle_request(lambda: client.get(f"{self._base_url}/{endpoint}"))
             elif method == 'POST':
