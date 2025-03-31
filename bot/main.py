@@ -65,7 +65,9 @@ def main() -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, telegraph_handler.add)
             ]
         },
-        fallbacks = [],
+        fallbacks = [
+            CommandHandler("komga", telegraph_handler.fallback)
+        ],
         conversation_timeout = 300
     )
     neko_chan.add_handler(telegraph_conversation_handler)

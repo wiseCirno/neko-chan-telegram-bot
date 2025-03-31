@@ -209,12 +209,32 @@ class TelegraphMessageHandler:
 
     @staticmethod
     async def start(update: Update, _):
-        if update.message.from_user.id != config.MY_USER_ID:
-            await update.message.reply_text(Dialog.KOMGA_HANDLER_USER_UNAUTHORIZED(update.message))
+        parameter = update.message.text.partition(" ")[2].strip()
+        if parameter == "":
+            await update.message.reply_text(Dialog.COMMAND_KOMGA_EMPTY)
             return ConversationHandler.END
-        else:
-            await update.message.reply_text(Dialog.KOMGA_HANDLER_USER_AUTHORIZED(update.message))
-            return KOMGA_STATE_ACTIVATED
+        if parameter == "help":
+            await update.message.reply_text(Dialog.COMMAND_KOMGA_HELP)
+            return ConversationHandler.END
+        if parameter == "start":
+            if update.message.from_user.id != config.MY_USER_ID:
+                await update.message.reply_text(Dialog.KOMGA_HANDLER_USER_UNAUTHORIZED(update.message))
+                return ConversationHandler.END
+            else:
+                await update.message.reply_text(Dialog.KOMGA_HANDLER_USER_AUTHORIZED(update.message))
+                return KOMGA_STATE_ACTIVATED
+        if parameter == "stop":
+            await update.message.reply_text(Dialog.COMMAND_KOMGA_NOT_STARTED)
+            return ConversationHandler.END
+
+        await update.message.reply_text(Dialog.COMMAND_KOMGA_UNSUPPORTED(parameter))
+        return ConversationHandler.END
+
+    @staticmethod
+    async def fallback(update: Update, _):
+        if update.message.text == "/komga stop":
+            await update.message.reply_text(Dialog.COMMAND_KOMGA_STOP)
+            return ConversationHandler.END
 
     async def add(self, update: Update, _):
         await self._handler.add_task(update)

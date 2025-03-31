@@ -31,3 +31,11 @@ class Dialog:
     KOMGA_TASK_FAILED: Callable[[Exception], str] = (
         staticmethod(lambda err: f"`{err}`\n\n如果你确定这条消息有效，请稍后再试试\n\n"
                                  f"[🔍 Search error on Google](https://www.google.com/search?q=Python: {err})"))
+
+    COMMAND_KOMGA_EMPTY = "此命令需要参数 /komga <parameter>\n使用 /komga help 获取帮助"
+    COMMAND_KOMGA_HELP = ("/komga help - 获取此命令的帮助信息\n"
+                          "/komga start - 启动 Telegraph 下载同步，空闲五分钟后自动关闭\n"
+                          "/komga stop - 手动关闭 Telegraph 下载同步")
+    COMMAND_KOMGA_NOT_STARTED = "没有正在运行的同步，无需停止"
+    COMMAND_KOMGA_STOP = "已手动结束任务"
+    COMMAND_KOMGA_UNSUPPORTED: Callable[[str], str] = staticmethod(lambda param: f"不支持的参数 '{param}'")

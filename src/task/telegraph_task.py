@@ -10,9 +10,6 @@ from src.service import TelegraphService, FileService, ImageService
 class TelegraphTask:
     @staticmethod
     async def run(task_wrapper: Dict):
-        """
-        :return:
-        """
         task_id: str = task_wrapper['id']
         srv: TelegraphService = task_wrapper['srv']
         message: Message = task_wrapper['update'].message
