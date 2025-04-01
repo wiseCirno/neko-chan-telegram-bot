@@ -2,14 +2,12 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from pydantic.v1 import UUID4
-
 from src.model.telegraph_tag import TelegraphTag
 
 
 @dataclass
 class Telegraph:
-    id: UUID4 = field(default_factory=uuid.uuid4)
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
     # 原始标题
     raw_title: str = ""
     # 正则过滤过的标题
