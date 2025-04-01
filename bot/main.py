@@ -8,19 +8,18 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from bot.help import introduce, instructions
-from bot.core import (
+
+import src.config as config
+from core import (
     ChatAnywhereHandler,
-    GPT_OK,
-    GPT_INIT,
-    KOMGA_STATE_ACTIVATED,
     PandoraBox,
     LongSticker,
-    TelegraphMessageHandler
+    TelegraphMessageHandler,
 )
+from help import introduce, instructions
 from src.logger import logger
-import src.config as config
 from src.service import ProxyService
+from state import *
 
 
 def main() -> None:
@@ -61,7 +60,7 @@ def main() -> None:
             CommandHandler("komga", telegraph_handler.start)
         ],
         states = {
-            KOMGA_STATE_ACTIVATED: [
+            KOMGA_HANDLER_ACTIVATED: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, telegraph_handler.add)
             ]
         },
