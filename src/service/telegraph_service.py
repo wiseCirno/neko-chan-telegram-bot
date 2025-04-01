@@ -1,13 +1,16 @@
 import asyncio
+import html
 import json
 import re
-from typing import List
+import uuid
+from datetime import datetime
+from typing import List, Optional, Dict, Any
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
 from src import config as config
-from src.model import Telegraph, TelegraphHeaders
+from src.model import Telegraph, TelegraphHeaders, TelegraphTag
 from ._client import new_async_client
 from ._parser import TelegraphParser
 from ._sql_service import SqlService
@@ -29,8 +32,6 @@ class TelegraphService:
         service = cls(telegraph)
         await service._get_information()
         return service
-
-    import re
 
     def _get_title_from_raw_title(self) -> None:
         raw = self.telegraph.raw_title
@@ -58,6 +59,35 @@ class TelegraphService:
                     break
         else:
             self.telegraph.title = preprocessed_title
+
+    @staticmethod
+    def _map_to_telegraph_tag(tags: Dict) -> TelegraphTag:
+        return TelegraphTag(
+            language = json.loads(tags["language"]) if tags["language"] != 'null' else None,
+            original = json.loads(tags["original"]) if tags["original"] != 'null' else None,
+            team = json.loads(tags["team"]) if tags["team"] != 'null' else None,
+            artist = json.loads(tags["artist"]) if tags["artist"] != 'null' else None,
+            others = json.loads(tags["others"]) if tags["others"] != 'null' else None,
+            male = json.loads(tags["male"]) if tags["male"] != 'null' else None,
+            female = json.loads(tags["female"]) if tags["female"] != 'null' else None,
+            mix = json.loads(tags["mix"]) if tags["mix"] != 'null' else None,
+            rating = tags["rating"],
+            pages = tags["pages"]
+        )
+
+    @staticmethod
+    def _map_to_telegraph(data: Dict) -> Telegraph:
+        return Telegraph(
+            id = uuid.UUID(data['id']),
+            raw_title = data['raw_title'],
+            title = data['title'],
+            time_added = datetime.fromisoformat(data['time_added']),
+            url = data['url'],
+            original = data['original'],
+            thumb = data['thumb'],
+            image_list = json.loads(data['image_list']),
+            file_path = data['file_path']
+        )
 
     async def _get_information(self) -> None:
         async with new_async_client(TelegraphHeaders.DEFAULT) as client:
@@ -147,8 +177,30 @@ class TelegraphService:
         if not config.DATABASE_TELEGRAPH_INITIALIZED:
             await self._initialize_table()
 
+        query_sql = "SELECT title, file_path FROM Telegraph WHERE title = ?"
+        rows = await SqlService.execute_reader(query_sql, [self.telegraph.title])
+
+        # 避免重复插入
+        if rows:
+            row = rows[0]
+            db_file_path = row["file_path"]
+            db_original = row["original"]
+            updates = {}
+            if not db_file_path and self.telegraph.file_path:
+                updates["file_path"] = self.telegraph.file_path
+            if not db_original and self.telegraph.original:
+                updates["original"] = self.telegraph.original
+            if updates:
+                set_clause = ", ".join([f"{key} = ?" for key in updates.keys()])
+                update_sql = f"UPDATE Telegraph SET {set_clause} WHERE title = ?"
+                parameters = list(updates.values()) + [self.telegraph.title]
+                await SqlService.execute_non_query(update_sql, parameters)
+            else:
+                return
+
         insert_sql = """
-        INSERT INTO Telegraph (id, raw_title, title, time_added, url, original, thumb, image_list, file_path) 
+        INSERT INTO Telegraph 
+        (id, raw_title, title, time_added, url, original, thumb, image_list, file_path) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         parameters = [
@@ -163,12 +215,13 @@ class TelegraphService:
             self.telegraph.file_path
         ]
         await SqlService.execute_non_query(insert_sql, parameters)
-        insert_sql = """
+
+        insert_tag_sql = """
         INSERT INTO TelegraphTag 
         (telegraph_id, language, original, team, artist, others, male, female, mix, rating, pages) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        parameters = [
+        tag_parameters = [
             str(self.telegraph.id),
             json.dumps(self.telegraph.tags.language),
             json.dumps(self.telegraph.tags.original),
@@ -181,7 +234,95 @@ class TelegraphService:
             json.dumps(self.telegraph.tags.rating),
             json.dumps(self.telegraph.tags.pages)
         ]
-        await SqlService.execute_non_query(insert_sql, parameters)
+        await SqlService.execute_non_query(insert_tag_sql, tag_parameters)
+
+    @staticmethod
+    async def query_from_database(
+            title: Optional[str] = None,
+            tags: Optional[Dict[str, Any]] = None
+    ) -> Optional[List[Telegraph]]:
+        """
+        从 Telegraph 和 TelegraphTag 表中进行联查，
+        若两个参数都为 None 则返回一条随机记录。
+
+        :param title: 搜索标题（模糊查询）
+        :param tags: 根据标签搜索记录，采用等值匹配
+        :return: telegraph 列表，未查到数据时返回 None
+        """
+        if not config.DATABASE_TELEGRAPH_INITIALIZED:
+            await TelegraphService._initialize_table()
+
+        base_sql = """
+        SELECT
+            json_object(
+                'id', t.id,
+                'raw_title', t.raw_title,
+                'title', t.title,
+                'time_added', t.time_added,
+                'url', t.url,
+                'original', t.original,
+                'thumb', t.thumb,
+                'image_list', t.image_list,
+                'file_path', t.file_path
+            ) AS telegraph,
+            json_object(
+                'id', tt.id,
+                'telegraph_id', tt.telegraph_id,
+                'language', tt.language,
+                'original', tt.original,
+                'team', tt.team,
+                'artist', tt.artist,
+                'others', tt.others,
+                'male', tt.male,
+                'female', tt.female,
+                'mix', tt.mix,
+                'rating', tt.rating,
+                'pages', tt.pages
+            ) AS telegraph_tag
+        FROM Telegraph t
+        JOIN TelegraphTag tt ON t.id = tt.telegraph_id
+        """
+
+        params = []
+        where_clauses = []
+
+        # 随机返回一条记录
+        if not title and not tags:
+            sql = base_sql + " ORDER BY RANDOM() LIMIT 1"
+            result = await SqlService.execute_reader(sql)
+            if not result:
+                return None
+
+            telegraph_obj = TelegraphService._map_to_telegraph(json.loads(result[0]['telegraph']))
+            telegraph_obj.tags = TelegraphService._map_to_telegraph_tag(json.loads(result[0]['telegraph_tag']))
+            return [telegraph_obj]
+
+        if title:
+            where_clauses.append("t.title LIKE ?")
+            params.append(f"%{title}%")
+
+        if tags:
+            for field, value in tags.items():
+                if value and isinstance(value, list):
+                    for val in value:
+                        where_clauses.append(f"tt.{field} LIKE ?")
+                        params.append(f"%{json.dumps(val)}%")
+
+        if not where_clauses:
+            return None
+
+        base_sql += " WHERE " + " AND ".join(where_clauses)
+        result = await SqlService.execute_reader(base_sql, params)
+        if not result:
+            return None
+
+        telegraphs = []
+        for r in result:
+            telegraph_obj = TelegraphService._map_to_telegraph(json.loads(r['telegraph']))
+            telegraph_obj.tags = TelegraphService._map_to_telegraph_tag(json.loads(r['telegraph_tag']))
+            telegraphs.append(telegraph_obj)
+
+        return telegraphs
 
     def get_file_name(self) -> str:
         """
@@ -192,3 +333,43 @@ class TelegraphService:
         if len(file_name) > max_length:
             file_name = file_name[:max_length]
         return file_name
+
+    @staticmethod
+    def telegraph_message(telegraph: Telegraph) -> str:
+        m = ""
+        tags = telegraph.tags
+
+        def format_tags(label: str, tag_list: Optional[List[str]]) -> str:
+            if tag_list:
+                escaped_label = html.escape(label)
+                tags_str = " ".join(f"#{html.escape(tag)}" for tag in tag_list)
+                return f"<code>{escaped_label}</code>: {tags_str}\n"
+            return ""
+
+        m += format_tags("语言", tags.language)
+        m += format_tags("原作", tags.original)
+        m += format_tags("团队", tags.team)
+        m += format_tags("艺术家", tags.artist)
+        m += format_tags("其他", tags.others)
+        m += format_tags("男性", tags.male)
+        m += format_tags("女性", tags.female)
+        m += format_tags("混合", tags.mix)
+
+        escaped_title = html.escape(telegraph.raw_title)
+        m += f"<code>预览</code>: <a href=\"{telegraph.url}\">{escaped_title}</a>\n"
+        if telegraph.original != "":
+            m += f"<code>原始地址</code>: <a href=\"{telegraph.original}\">{telegraph.original}</a>\n"
+
+        if tags.rating != 0.0:
+            m += f"<code>评分</code>: {tags.rating}\n"
+        m += f"<code>页数</code>: {tags.pages}\n"
+
+        return m
+
+    @staticmethod
+    def telegraph_search_message(telegraphs: List[Telegraph]) -> str:
+        m = ""
+        for i, telegraph in enumerate(telegraphs):
+            m += f"<code>结果{i}</code>: <a href=\"{telegraph.url}\">{telegraph.title}</a>\n\n"
+
+        return m
