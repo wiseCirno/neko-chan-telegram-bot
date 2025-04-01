@@ -9,14 +9,12 @@ from httpx import Proxy
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ConversationHandler, ContextTypes, filters
 
-from src.dialog import Dialog
+import src.config as config
 from src.api import ChatAnywhereApi, TraceMoeApi
 from src.handler import TelegraphHandler
-from src.service_old import AggregationSearch
 from src.logger import logger
-import src.config as config
-
-(KOMGA_STATE_ACTIVATED, GPT_INIT, GPT_OK) = range(3)
+from src.service_old import AggregationSearch
+from state import *
 
 
 class LongSticker:
@@ -200,41 +198,14 @@ class PandoraBox:
 
 class TelegraphMessageHandler:
     def __init__(self):
-        self._handler: TelegraphHandler | None = TelegraphHandler()
+        self._handler: TelegraphHandler = TelegraphHandler()
+        asyncio.get_event_loop().create_task(self._handler.start_loop()) if config.MY_USER_ID != -1 else None
 
-        if config.MY_USER_ID != -1:
-            asyncio.get_event_loop().create_task(self._handler.start_loop())
-        else:
-            self._handler = None
+    async def start(self, update: Update, _):
+        return await self._handler.handle_start(update)
 
-    @staticmethod
-    async def start(update: Update, _):
-        parameter = update.message.text.partition(" ")[2].strip()
-        if parameter == "":
-            await update.message.reply_text(Dialog.COMMAND_KOMGA_EMPTY)
-            return ConversationHandler.END
-        if parameter == "help":
-            await update.message.reply_text(Dialog.COMMAND_KOMGA_HELP)
-            return ConversationHandler.END
-        if parameter == "start":
-            if update.message.from_user.id != config.MY_USER_ID:
-                await update.message.reply_text(Dialog.KOMGA_HANDLER_USER_UNAUTHORIZED(update.message))
-                return ConversationHandler.END
-            else:
-                await update.message.reply_text(Dialog.KOMGA_HANDLER_USER_AUTHORIZED(update.message))
-                return KOMGA_STATE_ACTIVATED
-        if parameter == "stop":
-            await update.message.reply_text(Dialog.COMMAND_KOMGA_NOT_STARTED)
-            return ConversationHandler.END
-
-        await update.message.reply_text(Dialog.COMMAND_KOMGA_UNSUPPORTED(parameter))
-        return ConversationHandler.END
-
-    @staticmethod
-    async def fallback(update: Update, _):
-        if update.message.text == "/komga stop":
-            await update.message.reply_text(Dialog.COMMAND_KOMGA_STOP)
-            return ConversationHandler.END
+    async def fallback(self, update: Update, _):
+        return await self._handler.handle_fallback(update)
 
     async def add(self, update: Update, _):
         await self._handler.add_task(update)
