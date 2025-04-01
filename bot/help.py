@@ -13,17 +13,17 @@ async def introduce(update: Update, _):
 async def instructions(update: Update, _):
     await update.message.reply_markdown(
         "_命令列表_:\n\n"
-        
+
         "/hug /pet /kiss /cuddle /snog\n"
         "对猫猫搂搂抱抱请随意 c:，Neko 开心了以后会根据你回复的内容来：搜图；把 Telegraph 本子打包成 epub；下载贴纸\n\n"
-        
+
         "/anime\n"
         "支持通过回复上传的图片文件/压缩图片的番剧截图（）来进行番剧搜索（时间线也有哦）。\n\n"
-        
+
         "/komga\n"
         "`自动关闭: 5min`\n"
         "仅限于所有者填写环境变量中的个人ID后启用，使用命令后将 Telegraph 漫画交给 Neko，她会帮你妥善整理在服务器里的 c:\n\n"
-        
+
         "/chat\n"
         "`结束聊天` /bye\n"
         "`自动关闭: 5min`\n"
