@@ -1,4 +1,5 @@
-from typing import Any, List, Optional, Iterable
+from sqlite3 import Row
+from typing import Any, List, Optional
 
 import aiosqlite
 
@@ -7,7 +8,7 @@ import src.config as config
 
 class SqlService:
     @staticmethod
-    async def execute_reader(sql: str, parameters: Optional[List[Any]] = None) -> Iterable[aiosqlite.Row]:
+    async def execute_reader(sql: str, parameters: Optional[List[Any]] = None) -> List[Row]:
         """
         执行查询操作，返回所有行数据。
         """
