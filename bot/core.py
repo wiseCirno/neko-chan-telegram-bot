@@ -208,7 +208,7 @@ class TelegraphMessageHandler:
         return await self._handler.handle_fallback(update)
 
     async def add(self, update: Update, _):
-        await self._handler.add_task(update)
+        await self._handler.add_task(update, True)
 
 
 class ChatAnywhereHandler:

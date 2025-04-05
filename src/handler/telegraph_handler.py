@@ -84,10 +84,11 @@ class TelegraphHandler:
     async def start_loop(self):
         self._main_loop_task = asyncio.create_task(self._main_loop())
 
-    async def add_task(self, update: Update):
+    async def add_task(self, update: Update, download: bool = False):
         """
         添加任务：构造任务包装字典，包括重试计数，并放入队列
         :param update: Telegram Update 类型
+        :param download: 选择是否要下载到本地，默认是否
         """
         message = update.message
         logger.debug(f"Append telegraph task<{message.chat_id}-{message.id}> from {message.from_user.username}")
@@ -96,7 +97,7 @@ class TelegraphHandler:
             'retry': 0,
             'srv': None,
             'update': update,
-            'task_type': config.BOT_TELEGRAPH_SAVE_FORMAT,
+            'task_type': config.TELEGRAPH_SAVE_EXTENSION if download else "no_file",
             'return': ""
         }
 
@@ -129,34 +130,35 @@ class TelegraphHandler:
 
     async def _process_command(self, update: Update, parameter: (str, str), fallback: bool = False) -> int:
         param1, param2 = parameter
+        return_state = KOMGA_HANDLER_ACTIVATED if fallback else ConversationHandler.END
 
         if param1 == "":
             await update.message.reply_markdown(KomgaDialog.EMPTY)
-            return ConversationHandler.END
+            return return_state
 
         if param1 == "help":
             await update.message.reply_text(KomgaDialog.HELP)
-            return ConversationHandler.END
+            return return_state
 
         if param1 == "status":
             await update.message.reply_text(KomgaDialog.STATUS(self._task_queue.qsize(), self._batch_size))
-            return ConversationHandler.END
+            return return_state
 
         if param1 == "random":
             telegraph_obj = await self._random_from_database()
             await update.message.reply_html(KomgaDialog.RANDOM(telegraph_obj), do_quote = False)
-            return ConversationHandler.END
+            return return_state
 
         if param1 == "search":
             if not param2:
                 await update.message.reply_markdown(KomgaDialog.SEARCH_FALLBACK)
-                return ConversationHandler.END
+                return return_state
             try:
                 result = await self._search_from_database(param2)
                 await update.message.reply_html(KomgaDialog.SEARCH(result))
             except IndexError:
                 await update.message.reply_markdown(KomgaDialog.SEARCH_FALLBACK)
-            return ConversationHandler.END
+            return return_state
 
         if param1 == "stop":
             if fallback:
