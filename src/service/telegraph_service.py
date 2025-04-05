@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 
 from src import config as config
 from src.model import Telegraph, TelegraphHeaders, TelegraphTag
-from ._client import new_async_client
+from .client_service import new_async_client
 from ._parser import TelegraphParser
 from ._sql_service import SqlService
 
