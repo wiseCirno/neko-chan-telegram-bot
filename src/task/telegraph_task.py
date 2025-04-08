@@ -3,9 +3,14 @@ from typing import Dict
 
 from telegram import Message
 
-from src import config as config
+from src.config import (
+    TELEGRAPH_DOWNLOAD_PATH,
+    KOMGA_PATH,
+    TELEGRAPH_SAVE_FOLDER_TYPE,
+    TELEGRAPH_TASK_FALLBACK_ARTIST
+)
+from src.model.telegraph import TelegraphHeaders
 from src.service import TelegraphService, FileService, ImageService
-from src.model import TelegraphHeaders
 
 
 class TelegraphTask:
@@ -32,24 +37,25 @@ class TelegraphTask:
             return
 
         # 获取艺术家名称
-        artist = srv.telegraph.tags.artist[0] if srv.telegraph.tags.artist else config.TELEGRAPH_TASK_FALLBACK_ARTIST
+        artist = srv.telegraph.tags.artist[0] if srv.telegraph.tags.artist else TELEGRAPH_TASK_FALLBACK_ARTIST
         file_name = srv.get_file_name()
-        download_path = os.path.join(config.TELEGRAPH_DOWNLOAD_PATH, str(srv.telegraph.id))
+        download_path = os.path.join(TELEGRAPH_DOWNLOAD_PATH, str(srv.telegraph.id))
 
         # 从图片列表下载，这里可能抛出异常
         await ImageService.download_to_local(srv.telegraph.image_list, download_path, "jpg", TelegraphHeaders.DOWNLOAD)
-        dir_name = artist if config.TELEGRAPH_SAVE_FOLDER_TYPE == "artist" else file_name
+        dir_name = artist if TELEGRAPH_SAVE_FOLDER_TYPE == "artist" else file_name
 
         if task_type == "zip":
-            await FileService.write_zip_async(file_name, config.TELEGRAPH_KOMGA_PATH, download_path, dir_name)
-            srv.telegraph.file_path = f"{config.TELEGRAPH_KOMGA_PATH}/{dir_name}/{file_name}.zip"
+            await FileService.write_zip_async(file_name, KOMGA_PATH, download_path, dir_name)
+            srv.telegraph.file_path = f"{KOMGA_PATH}/{dir_name}/{file_name}.zip"
             await srv.add_to_database()
             task_wrapper['return'] = f"Task<{task_id}> completed，type: <zip>"
             return
 
         if task_type == "epub":
-            await FileService.write_epub(srv, config.TELEGRAPH_KOMGA_PATH, download_path, dir_name)
-            srv.telegraph.file_path = f"{config.TELEGRAPH_KOMGA_PATH}/{dir_name}/{file_name}.epub"
+            await FileService.convert_telegraph_to_epub(
+                srv.telegraph, file_name, KOMGA_PATH, download_path, dir_name)
+            srv.telegraph.file_path = f"{KOMGA_PATH}/{dir_name}/{file_name}.epub"
             await srv.add_to_database()
             task_wrapper['return'] = f"Task<{task_id}> completed，type: <epub>"
             return
