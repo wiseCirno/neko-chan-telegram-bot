@@ -8,7 +8,7 @@ from .proxy_service import ProxyService
 
 def new_async_client(
         headers: Optional[Dict] = None,
-        base_url: Optional[str] = None
+        base_url: Optional[str] = ""
 ) -> AsyncClient:
     if PROXY:
         return AsyncClient(
