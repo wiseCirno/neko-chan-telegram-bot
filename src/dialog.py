@@ -3,7 +3,7 @@ from typing import Callable, List
 
 from telegram import Message
 
-from src.model import Telegraph
+from src.model.telegraph import Telegraph
 from src.service import TelegraphService
 
 

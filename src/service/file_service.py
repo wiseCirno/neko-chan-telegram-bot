@@ -9,8 +9,8 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import aiofiles
 from ebooklib import epub
 
-from src import config as config
-from .telegraph_service import TelegraphService
+from src.config import SKIP_EXISTED_FILE
+from src.model.telegraph import Telegraph
 
 
 class FileService:
@@ -31,7 +31,7 @@ class FileService:
         if not os.path.exists(path):
             return False
 
-        if config.SKIP_EXISTED_FILE:
+        if SKIP_EXISTED_FILE:
             return True
         else:
             os.remove(path)
@@ -77,22 +77,31 @@ class FileService:
             raise RuntimeError(f"Create Zip file error because {e}.")
 
     @staticmethod
-    async def write_zip_async(file_name: str, target_path: str, origin_path: str, dir_name: Optional[str] = None):
+    async def write_zip_async(
+            file_name: str,
+            target_path: str,
+            origin_path: str,
+            dir_name: Optional[str] = None
+    ) -> None:
         """Async version of FileService.write_zip()"""
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor() as executor:
             await loop.run_in_executor(executor, FileService.write_zip, file_name, target_path, origin_path, dir_name)
 
     @staticmethod
-    async def write_epub(service: TelegraphService, target_path: str, origin_path: str, dir_name: Optional[str] = None):
+    async def convert_telegraph_to_epub(
+            telegraph: Telegraph,
+            file_name: str,
+            target_path: str,
+            origin_path: str,
+            dir_name: Optional[str] = None
+    ) -> None:
         if not FileService._is_valid_path(target_path):
             raise ValueError(f"Invalid target path '{target_path}'")
         if not FileService._is_valid_path(origin_path):
             raise ValueError(f"Invalid origin path '{origin_path}'")
 
-        telegraph = service.telegraph
         create_path = os.path.join(target_path, dir_name) if dir_name else target_path
-        file_name = service.get_file_name()
         if FileService._skip_existed_file(os.path.join(create_path, file_name)):
             return
 

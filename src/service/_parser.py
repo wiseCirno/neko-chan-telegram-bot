@@ -1,7 +1,7 @@
 import re
 import urllib.parse
 
-from src.model import Telegraph
+from src.model.telegraph import Telegraph
 
 
 class TelegraphParser:

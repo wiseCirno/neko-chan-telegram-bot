@@ -7,7 +7,7 @@ from httpx import AsyncClient, Response
 from loguru import logger
 
 from src import config as config
-from src.model import Image
+from src.model.common import Image
 from .client_service import new_async_client
 
 

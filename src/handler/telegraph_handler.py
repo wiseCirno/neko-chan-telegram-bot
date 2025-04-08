@@ -5,11 +5,19 @@ from typing import Optional
 from telegram import Update
 from telegram.ext import ConversationHandler
 
-import src.config as config
 from bot.state import KOMGA_HANDLER_ACTIVATED
+from src.config import (
+    IS_DEBUG_MODE,
+    MY_USER_ID,
+    TELEGRAPH_HANDLER_BATCH_SIZE,
+    TELEGRAPH_HANDLER_IDLE_SLEEP_INTERVAL,
+    TELEGRAPH_HANDLER_IDLE_THRESHOLD,
+    TELEGRAPH_HANDLER_RETRY_COUNT,
+    TELEGRAPH_SAVE_EXTENSION
+)
 from src.dialog import KomgaDialog
 from src.logger import logger
-from src.model import Telegraph
+from src.model.telegraph import Telegraph
 from src.service import TelegraphService
 from src.task import TelegraphTask
 
@@ -41,16 +49,16 @@ class TelegraphHandler:
             for wrapper, result in zip(task_wrappers, results):
                 update: Update = wrapper['update']
                 if isinstance(result, Exception):
-                    if wrapper['retry'] < config.TELEGRAPH_HANDLER_RETRY_COUNT:
+                    if wrapper['retry'] < TELEGRAPH_HANDLER_RETRY_COUNT:
                         wrapper['retry'] += 1
                         logger.warning(f"Task<{wrapper['id']}> encountered an error: {result} "
-                                       f"[Retrying {wrapper['retry']}/{config.TELEGRAPH_HANDLER_RETRY_COUNT}]")
+                                       f"[Retrying {wrapper['retry']}/{TELEGRAPH_HANDLER_RETRY_COUNT}]")
                         await self._task_queue.put(wrapper)
                     else:
                         logger.error(f"Task<{wrapper['id']}> error: {result}")
                         await update.message.reply_markdown(KomgaDialog.TASK_FAILED(result), do_quote = True)
                 else:
-                    if config.IS_DEBUG_MODE:
+                    if IS_DEBUG_MODE:
                         await update.message.reply_markdown(wrapper['return'], do_quote = True)
                     logger.debug(wrapper['return'])
 
@@ -63,14 +71,14 @@ class TelegraphHandler:
             if not self._task_queue.empty():
                 self._idle_counter = 0
                 q_size = self._task_queue.qsize()
-                self._batch_size = 1 if (q_size == 1 or config.TELEGRAPH_HANDLER_BATCH_SIZE == 1) \
-                    else min(q_size, config.TELEGRAPH_HANDLER_BATCH_SIZE)
+                self._batch_size = 1 if (q_size == 1 or TELEGRAPH_HANDLER_BATCH_SIZE == 1) \
+                    else min(q_size, TELEGRAPH_HANDLER_BATCH_SIZE)
                 await self._worker(self._batch_size)
             else:
                 self._idle_counter += 1
 
-                if self._idle_counter >= config.TELEGRAPH_HANDLER_IDLE_THRESHOLD:
-                    sleep_interval = config.TELEGRAPH_HANDLER_IDLE_SLEEP_INTERVAL
+                if self._idle_counter >= TELEGRAPH_HANDLER_IDLE_THRESHOLD:
+                    sleep_interval = TELEGRAPH_HANDLER_IDLE_SLEEP_INTERVAL
                     logger.debug(f"Queue idle, sleeping longer time: {sleep_interval}s")
                 else:
                     sleep_interval = 1
@@ -97,7 +105,7 @@ class TelegraphHandler:
             'retry': 0,
             'srv': None,
             'update': update,
-            'task_type': config.TELEGRAPH_SAVE_EXTENSION if download else "no_file",
+            'task_type': TELEGRAPH_SAVE_EXTENSION if download else "no_file",
             'return': ""
         }
 
@@ -173,7 +181,7 @@ class TelegraphHandler:
                 await update.message.reply_text(KomgaDialog.ALREADY_STARTED)
                 return KOMGA_HANDLER_ACTIVATED
 
-            if update.message.from_user.id != config.MY_USER_ID:
+            if update.message.from_user.id != MY_USER_ID:
                 await update.message.reply_text(KomgaDialog.USER_UNAUTHORIZED(update.message))
                 return ConversationHandler.END
 

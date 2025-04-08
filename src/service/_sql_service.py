@@ -3,7 +3,7 @@ from typing import Any, List, Optional
 
 import aiosqlite
 
-import src.config as config
+from src.config import DATABASE
 
 
 class SqlService:
@@ -13,7 +13,7 @@ class SqlService:
         执行查询操作，返回所有行数据。
         """
         parameters = parameters or []
-        async with aiosqlite.connect(config.DATABASE_PATH) as conn:
+        async with aiosqlite.connect(DATABASE) as conn:
             conn.row_factory = aiosqlite.Row
             async with conn.execute(sql, parameters) as cursor:
                 rows = await cursor.fetchall()
@@ -25,7 +25,7 @@ class SqlService:
         执行 INSERT、UPDATE 或 DELETE 操作，返回受影响的行数。
         """
         parameters = parameters or []
-        async with aiosqlite.connect(config.DATABASE_PATH) as conn:
+        async with aiosqlite.connect(DATABASE) as conn:
             async with conn.execute(sql, parameters) as cursor:
                 await conn.commit()
                 return cursor.rowcount
@@ -36,7 +36,7 @@ class SqlService:
         执行查询操作，仅返回第一行的第一列数据。
         """
         parameters = parameters or []
-        async with aiosqlite.connect(config.DATABASE_PATH) as conn:
+        async with aiosqlite.connect(DATABASE) as conn:
             async with conn.execute(sql, parameters) as cursor:
                 row = await cursor.fetchone()
                 if row:
