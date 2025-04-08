@@ -10,10 +10,10 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 from src import config as config
-from src.model import Telegraph, TelegraphHeaders, TelegraphTag
-from .client_service import new_async_client
+from src.model.telegraph import Telegraph, TelegraphHeaders, TelegraphTag
 from ._parser import TelegraphParser
 from ._sql_service import SqlService
+from .client_service import new_async_client
 
 
 class TelegraphService:
@@ -41,7 +41,7 @@ class TelegraphService:
         if dash_index != -1:
             raw = raw[:dash_index].strip()
 
-        preprocessed_title = raw
+        self.telegraph.raw_title = raw
         patterns = [
             r"^\s*$[^)]*$\s*$[^$]+\]\s*(.+?)(?=\s*$)",
             r"^\s*$$[^$]+$$\s*(.+?)(?=\s*$)",
@@ -51,14 +51,14 @@ class TelegraphService:
         ]
 
         for pattern in patterns:
-            match = re.search(pattern, preprocessed_title)
+            match = re.search(pattern, self.telegraph.raw_title)
             if match:
                 title = match.group(1).strip()
                 if title:
                     self.telegraph.title = title
                     break
         else:
-            self.telegraph.title = preprocessed_title
+            self.telegraph.title = self.telegraph.raw_title
 
     @staticmethod
     def _map_to_telegraph_tag(tags: Dict) -> TelegraphTag:
@@ -171,10 +171,10 @@ class TelegraphService:
         """
         await SqlService.execute_non_query(telegraph_sql)
         await SqlService.execute_non_query(telegraph_tag_sql)
-        config.DATABASE_TELEGRAPH_INITIALIZED = True
+        config.DATABASE_INITIALIZED = True
 
     async def add_to_database(self) -> None:
-        if not config.DATABASE_TELEGRAPH_INITIALIZED:
+        if not config.DATABASE_INITIALIZED:
             await self._initialize_table()
 
         query_sql = "SELECT title, file_path FROM Telegraph WHERE title = ?"
@@ -249,7 +249,7 @@ class TelegraphService:
         :param tags: 根据标签搜索记录，采用等值匹配
         :return: telegraph 列表，未查到数据时返回 None
         """
-        if not config.DATABASE_TELEGRAPH_INITIALIZED:
+        if not config.DATABASE_INITIALIZED:
             await TelegraphService._initialize_table()
 
         base_sql = """
